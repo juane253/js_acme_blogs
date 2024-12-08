@@ -6,8 +6,8 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Final Project: Acme Blogs</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/mocha/9.1.3/mocha.css"
-        integrity="sha512-Ytt2foRGKdIInPXwyS3gxRvfTv4n2wi7uB7neCLH1LjExT+PKBeQu6LNVB4QpHaJqx7m2btagBs4kqxYC1QNFg=="
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/mocha/9.1.3/mocha.css" 
+        integrity="sha512-Ytt2foRGKdIInPXwyS3gxRvfTv4n2wi7uB7neCLH1LjExT+PKBeQu6LNVB4QpHaJqx7m2btagBs4kqxYC1QNFg==" 
         crossorigin="anonymous" />
     <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="https://serene-roentgen-345cd7.netlify.app/css/finalProject.min.css" />
@@ -32,14 +32,277 @@
         <p>Acme Company</p>
     </footer>
     <div id="mocha" class="testResults"></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mocha/9.1.3/mocha.min.js"
-        integrity="sha512-lvMvODyFG9d4cHdd60PNqWrHrXuuwI4NT4hZVZBVqF95tsNY36VJbXXG/s7Fv4DO4bk/g5pAvJkbKdKdieb1+g=="
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mocha/9.1.3/mocha.min.js" 
+        integrity="sha512-lvMvODyFG9d4cHdd60PNqWrHrXuuwI4NT4hZVZBVqF95tsNY36VJbXXG/s7Fv4DO4bk/g5pAvJkbKdKdieb1+g==" 
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chai/4.3.4/chai.min.js"
-        integrity="sha512-gkZWobgJrQevN2HMEeTnSlxWPJ3HS0JJ3nXcgI6XLK/NI0z59jbztRZqbTlIzfl21vIGahQaeW0knwH1az/tbg=="
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chai/4.3.4/chai.min.js" 
+        integrity="sha512-gkZWobgJrQevN2HMEeTnSlxWPJ3HS0JJ3nXcgI6XLK/NI0z59jbztRZqbTlIzfl21vIGahQaeW0knwH1az/tbg==" 
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script>
         mocha.setup("bdd");
+
+        // Helper Functions (createElemWithText, createSelectOptions, etc.)
+
+        function createElemWithText(tagName = "p", textContent = "", className) {
+            const elem = document.createElement(tagName);
+            elem.textContent = textContent;
+            if (className) elem.classList.add(className);
+            return elem;
+        }
+
+        function createSelectOptions(users) {
+            if (!Array.isArray(users)) return undefined;
+            return users.map(user => {
+                const option = document.createElement("option");
+                option.value = user.id;
+                option.textContent = user.name;
+                return option;
+            });
+        }
+
+        async function getUsers() {
+            try {
+                const response = await fetch("https://jsonplaceholder.typicode.com/users");
+                return await response.json();
+            } catch (error) {
+                console.error("Error fetching users:", error);
+                return undefined;
+            }
+        }
+
+        function populateSelectMenu(users) {
+            if (!Array.isArray(users)) return undefined;
+            const selectMenu = document.getElementById("selectMenu");
+            const options = createSelectOptions(users);
+            options.forEach(option => selectMenu.appendChild(option));
+            return selectMenu;
+        }
+
+        // New Functions: initPage and initApp
+
+        async function initPage() {
+            const users = await getUsers();  // Fetch users data
+            const selectMenu = populateSelectMenu(users);  // Populate the select menu with users
+
+            // Return the array containing users data and select element
+            return [users, selectMenu];
+        }
+
+        // Function to initialize the entire app
+        async function initApp() {
+            const [users, selectMenu] = await initPage();  // Initialize page data
+            if (!users || !selectMenu) {
+                console.error("Error initializing page.");
+                return;
+            }
+
+            // Event listener for the select menu to update posts based on selected user
+            selectMenu.addEventListener("change", selectMenuChangeEventHandler);
+        }
+
+        // Call initApp to start the app when the page loads
+        window.addEventListener("DOMContentLoaded", initApp);
+
+        // selectMenuChangeEventHandler function
+        async function selectMenuChangeEventHandler(event) {
+            // Check if an event is passed
+            if (!event || !event.target) return undefined;
+
+            // Get the user ID from the selected value in the menu
+            const userId = event.target.value;
+            if (!userId) return undefined;
+
+            // Fetch posts for the selected user
+            const posts = await getUserPosts(userId);
+
+            // Return an array containing userId, posts, and refreshPostsArray
+            return [userId, posts, refreshPostsArray];
+        }
+
+        // Function to refresh posts by re-fetching posts for the current user
+        async function refreshPostsArray(userId) {
+            if (!userId) return undefined;
+            const posts = await getUserPosts(userId);
+            return posts;
+        }
+
+        // Functions for button event listeners and toggling comment sections
+
+        function toggleCommentSection(postId) {
+            if (!postId) return undefined;
+            const section = document.querySelector(`section[data-post-id="${postId}"]`);
+            if (!section) return null;
+            section.classList.toggle("hide");
+            return section;
+        }
+
+        function toggleCommentButton(postId) {
+            if (!postId) return undefined;
+            const button = document.querySelector(`button[data-post-id="${postId}"]`);
+            if (!button) return null;
+            button.textContent = button.textContent.includes("Show") ? "Hide Comments" : "Show Comments";
+            return button;
+        }
+
+        // Function to create and display posts for a user
+        function createPosts(posts) {
+            if (!Array.isArray(posts)) return undefined;
+            const fragment = document.createDocumentFragment();
+            posts.forEach(post => {
+                const article = document.createElement("article");
+                const h2 = createElemWithText("h2", post.title);
+                const bodyP = createElemWithText("p", post.body);
+                const button = document.createElement("button");
+                button.textContent = "Show Comments";
+                button.dataset.postId = post.id;
+                article.append(h2, bodyP, button);
+                fragment.appendChild(article);
+            });
+            return fragment;
+        }
+
+        async function displayPosts(posts) {
+            const main = document.querySelector("main");
+            deleteChildElements(main);
+            if (!posts || posts.length === 0) {
+                const message = createElemWithText("p", "No posts available.", "default-text");
+                main.appendChild(message);
+                return message;
+            }
+            const fragment = createPosts(posts);
+            main.appendChild(fragment);
+            addButtonListeners(main); // Add button listeners after posts are displayed
+            return fragment;
+        }
+
+        function deleteChildElements(parentElement) {
+            if (!(parentElement instanceof HTMLElement)) return undefined;
+            while (parentElement.firstChild) {
+                parentElement.removeChild(parentElement.firstChild);
+            }
+            return parentElement;
+        }
+
+        async function getUserPosts(userId) {
+            if (!userId) return undefined;
+            try {
+                const response = await fetch(`https://jsonplaceholder.typicode.com/posts?userId=${userId}`);
+                return await response.json();
+            } catch (error) {
+                console.error("Error fetching user posts:", error);
+                return undefined;
+            }
+        }
+
+        // Function to add event listeners to buttons for toggling comment sections
+        function addButtonListeners(mainElement) {
+            if (!(mainElement instanceof HTMLElement)) return undefined;
+
+            const buttons = mainElement.querySelectorAll("button[data-post-id]");
+
+            // If no buttons found, return empty NodeList
+            if (!buttons.length) {
+                return buttons;  // This is already a NodeList, no need to modify
+            }
+
+            // Loop through the buttons and add event listeners
+            buttons.forEach(button => {
+                // Skip buttons without the postId data attribute
+                if (!button.dataset.postId) {
+                    return;
+                }
+
+                // Add a click listener to call the toggleComments function
+                button.addEventListener("click", function () {
+                    const postId = button.dataset.postId;
+                    toggleCommentSection(postId);
+                    toggleCommentButton(postId);
+                });
+            });
+
+            // Return all button elements found within the main element
+            return buttons;
+        }
+
+        // Function to remove event listeners from buttons
+        function removeButtonListeners(mainElement) {
+            if (!(mainElement instanceof HTMLElement)) return undefined;
+
+            const buttons = mainElement.querySelectorAll("button[data-post-id]");
+
+            // If no buttons found, return empty NodeList
+            if (!buttons.length) {
+                return buttons;  // This is already a NodeList, no need to modify
+            }
+
+            // Loop through the buttons and remove event listeners
+            buttons.forEach(button => {
+                // Skip buttons without the postId data attribute
+                if (!button.dataset.postId) {
+                    return;
+                }
+
+                // Remove the click listener
+                button.removeEventListener("click", function () {
+                    const postId = button.dataset.postId;
+                    toggleCommentSection(postId);
+                    toggleCommentButton(postId);
+                });
+            });
+
+            // Return all button elements found within the main element
+            return buttons;
+        }
+
+        // Function to get data for a specific user by ID
+        async function getUser(userId) {
+            if (!userId) return undefined;  // Return undefined if no user ID is provided
+            try {
+                const response = await fetch(`https://jsonplaceholder.typicode.com/users/${userId}`);
+                return await response.json();  // Return the user data
+            } catch (error) {
+                console.error("Error fetching user:", error);
+                return undefined;
+            }
+        }
+
+        // Function to display comments for a specific post
+        async function displayComments(postId) {
+            if (!postId) return undefined;  // Return undefined if no postId is provided
+
+            const comments = await getPostComments(postId);
+            const section = document.createElement("section");
+            section.classList.add("comments", "hide");
+            section.dataset.postId = postId;
+
+            if (comments && comments.length > 0) {
+                comments.forEach(comment => {
+                    const commentElem = document.createElement("div");
+                    commentElem.classList.add("comment");
+                    const p = createElemWithText("p", comment.body);
+                    const commenter = createElemWithText("h3", comment.name);
+                    commentElem.append(commenter, p);
+                    section.appendChild(commentElem);
+                });
+            } else {
+                const noComments = createElemWithText("p", "No comments available.");
+                section.appendChild(noComments);
+            }
+
+            return section;
+        }
+
+        // Helper function to fetch comments for a post
+        async function getPostComments(postId) {
+            if (!postId) return undefined;
+            try {
+                const response = await fetch(`https://jsonplaceholder.typicode.com/comments?postId=${postId}`);
+                return await response.json();
+            } catch (error) {
+                console.error("Error fetching comments:", error);
+                return [];
+            }
+        }
     </script>
 </body>
 
